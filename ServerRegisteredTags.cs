@@ -1,0 +1,8 @@
+namespace VpnHood.Core.Common.Tokens;
+
+public static class ServerRegisteredTags
+{
+	public const string Premium = "#premium";
+
+	public const string Unblockable = "#unblockable";
+}

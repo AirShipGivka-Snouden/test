@@ -1,0 +1,167 @@
+using System;
+using System.Collections.Generic;
+using VpnHood.Core.Common.Messaging;
+using VpnHood.Core.PacketTransports;
+using VpnHood.Core.Packets;
+using VpnHood.Core.Packets.Extensions;
+using VpnHood.Core.Toolkit.Net;
+using VpnHood.Core.Toolkit.Sockets;
+using VpnHood.Core.Tunneling.Channels;
+using VpnHood.Core.Tunneling.Exceptions;
+
+namespace VpnHood.Core.Tunneling.Proxies;
+
+public class ProxyManager : PassthroughPacketTransport
+{
+	private readonly List<ProxyChannel> _streamProxyChannels = new List<ProxyChannel>();
+
+	private readonly IPacketProxyPool? _pingProxyPool;
+
+	private readonly IPacketProxyPool _udpProxyPool;
+
+	public bool IsIpV6Supported { get; set; } = true;
+
+	public int PingClientCount => _pingProxyPool?.ClientCount ?? 0;
+
+	public int UdpClientCount => _udpProxyPool.ClientCount;
+
+	public int TcpConnectionCount
+	{
+		get
+		{
+			lock (_streamProxyChannels)
+			{
+				return _streamProxyChannels.Count;
+			}
+		}
+	}
+
+	public Traffic Traffic
+	{
+		get
+		{
+			lock (_streamProxyChannels)
+			{
+				Traffic result = new Traffic(base.PacketStat.SentBytes, base.PacketStat.ReceivedBytes);
+				for (int i = 0; i < _streamProxyChannels.Count; i++)
+				{
+					result += _streamProxyChannels[i].Traffic;
+				}
+				return result;
+			}
+		}
+	}
+
+	public ProxyManager(ISocketFactory socketFactory, ProxyManagerOptions options)
+	{
+		UdpProxyPoolOptions options2 = new UdpProxyPoolOptions
+		{
+			PacketProxyCallbacks = options.PacketProxyCallbacks,
+			SocketFactory = socketFactory,
+			UdpTimeout = options.UdpTimeout,
+			MaxClientCount = options.MaxUdpClientCount,
+			LogScope = options.LogScope,
+			PacketQueueCapacity = options.PacketQueueCapacity,
+			BufferSize = options.UdpBufferSize,
+			AutoDisposePackets = options.AutoDisposePackets
+		};
+		IPacketProxyPool udpProxyPool;
+		if (!options.UseUdpProxy2)
+		{
+			IPacketProxyPool packetProxyPool = new UdpProxyPool(options2);
+			udpProxyPool = packetProxyPool;
+		}
+		else
+		{
+			IPacketProxyPool packetProxyPool = new UdpProxyPoolEx(options2);
+			udpProxyPool = packetProxyPool;
+		}
+		_udpProxyPool = udpProxyPool;
+		_udpProxyPool.PacketReceived += Proxy_PacketReceived;
+		if (options.IsPingSupported)
+		{
+			_pingProxyPool = new PingProxyPool(new PingProxyPoolOptions
+			{
+				PacketProxyCallbacks = options.PacketProxyCallbacks,
+				IcmpTimeout = options.IcmpTimeout,
+				MaxClientCount = options.MaxPingClientCount,
+				AutoDisposePackets = options.AutoDisposePackets,
+				LogScope = options.LogScope
+			});
+			_pingProxyPool.PacketReceived += Proxy_PacketReceived;
+		}
+	}
+
+	private void Proxy_PacketReceived(object? sender, IpPacket ipPacket)
+	{
+		OnPacketReceived(ipPacket);
+	}
+
+	protected override void SendPacket(IpPacket ipPacket)
+	{
+		if (ipPacket.IsV6() && !IsIpV6Supported)
+		{
+			throw new PacketDropException("IPv6 is not supported.");
+		}
+		switch (ipPacket.Protocol)
+		{
+		case IpProtocol.Udp:
+			_udpProxyPool.SendPacketQueued(ipPacket);
+			break;
+		case IpProtocol.IcmpV4:
+		case IpProtocol.IcmpV6:
+			if (_pingProxyPool == null)
+			{
+				throw new NotSupportedException("Ping is not supported by this proxy.");
+			}
+			_pingProxyPool.SendPacketQueued(ipPacket);
+			break;
+		default:
+			throw new Exception($"{ipPacket.Protocol} packet should not be sent through this channel.");
+		}
+	}
+
+	public void AddChannel(ProxyChannel channel, bool disposeOnFail)
+	{
+		try
+		{
+			ObjectDisposedException.ThrowIf(base.IsDisposed, this);
+			if (base.IsDisposed)
+			{
+				throw new ObjectDisposedException("ProxyManager");
+			}
+			lock (_streamProxyChannels)
+			{
+				_streamProxyChannels.Add(channel);
+			}
+			channel.Start();
+		}
+		catch
+		{
+			if (disposeOnFail)
+			{
+				channel.Dispose();
+			}
+			throw;
+		}
+	}
+
+	protected override void DisposeManaged()
+	{
+		_udpProxyPool.PacketReceived -= Proxy_PacketReceived;
+		_udpProxyPool.Dispose();
+		if (_pingProxyPool != null)
+		{
+			_pingProxyPool.PacketReceived -= Proxy_PacketReceived;
+			_pingProxyPool.Dispose();
+		}
+		lock (_streamProxyChannels)
+		{
+			foreach (ProxyChannel streamProxyChannel in _streamProxyChannels)
+			{
+				streamProxyChannel.Dispose();
+			}
+		}
+		base.DisposeManaged();
+	}
+}
