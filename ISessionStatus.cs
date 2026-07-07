@@ -1,0 +1,61 @@
+using System;
+using VpnHood.Core.Client.ConnectorServices;
+using VpnHood.Core.Common.Messaging;
+using VpnHood.Core.Toolkit.ApiClients;
+
+namespace VpnHood.Core.Client;
+
+public interface ISessionStatus
+{
+	ConnectorStat ConnectorStatus { get; }
+
+	Traffic Speed { get; }
+
+	Traffic SessionTraffic { get; }
+
+	Traffic SessionSplitTraffic { get; }
+
+	Traffic CycleTraffic { get; }
+
+	Traffic TotalTraffic { get; }
+
+	int StreamTunnelledCount { get; }
+
+	int StreamPassthruCount { get; }
+
+	int UnstableCount { get; }
+
+	int WaitingCount { get; }
+
+	int SessionPacketChannelCount { get; }
+
+	int ActivePacketChannelCount { get; }
+
+	ChannelProtocol ChannelProtocol { get; }
+
+	bool IsDropQuic { get; }
+
+	bool IsTcpProxy { get; }
+
+	bool CanChangeTcpProxy { get; }
+
+	bool CanExtendByRewardedAd { get; }
+
+	int UserReviewRecommended { get; }
+
+	long SessionMaxTraffic { get; }
+
+	DateTime? SessionExpirationTime { get; }
+
+	int? ActiveClientCount { get; }
+
+	bool IsDnsOverTlsDetected { get; }
+
+	bool IsIpV6SupportedByServer { get; }
+
+	bool IsIpV6SupportedByClient { get; }
+
+	ApiError? Error { get; }
+
+	bool IsAdapterStarted { get; }
+}
