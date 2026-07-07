@@ -1,0 +1,30 @@
+using System;
+using System.Net;
+using VpnHood.Core.Common.Messaging;
+using VpnHood.Core.Toolkit.Sockets;
+using VpnHood.Core.Tunneling.Channels;
+
+namespace VpnHood.Core.Client;
+
+internal class ClientUdpChannelTransmitter : UdpChannelTransmitter
+{
+	public IUdpTransport UdpTransport { get; }
+
+	public ClientUdpChannelTransmitter(ISocketFactory socketFactory, ulong sessionId, ReadOnlySpan<byte> sessionKey, IPEndPoint remoteEndPoint, TransferBufferSize? bufferSize)
+		: base(socketFactory.CreateUdpClient(remoteEndPoint.AddressFamily))
+	{
+		UdpTransport = new SessionUdpTransport(this, sessionId, sessionKey, remoteEndPoint, isServer: false);
+		base.BufferSize = bufferSize;
+	}
+
+	protected override SessionUdpTransport SessionIdToUdpTransport(ulong sessionId)
+	{
+		return (SessionUdpTransport)UdpTransport;
+	}
+
+	public override void Dispose()
+	{
+		UdpTransport.Dispose();
+		base.Dispose();
+	}
+}

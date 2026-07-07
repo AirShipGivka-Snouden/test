@@ -1,0 +1,32 @@
+using VpnHood.Core.Common.Messaging;
+using VpnHood.Core.Common.Tokens;
+
+namespace VpnHood.Core.Tunneling.Messaging;
+
+public class HelloRequest : ClientRequest
+{
+	public required string TokenId { get; init; }
+
+	public required ClientInfo ClientInfo { get; init; }
+
+	public required byte[] EncryptedClientId { get; init; }
+
+	public string? ServerLocation { get; init; }
+
+	public ConnectPlanId PlanId { get; init; }
+
+	public bool AllowRedirect { get; init; } = true;
+
+	public bool? IsIpV6Supported { get; init; }
+
+	public string? AccessCode { get; set; }
+
+	public UserReview? UserReview { get; init; }
+
+	public int Mtu { get; init; } = 1400;
+
+	public HelloRequest()
+		: base(1)
+	{
+	}
+}
