@@ -1,0 +1,8 @@
+namespace VpnHood.Core.Common.Trackers;
+
+public static class TrackEventNames
+{
+	public const string SessionStart = "session_start";
+
+	public const string PageView = "page_view";
+}
